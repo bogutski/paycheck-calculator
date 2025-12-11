@@ -11,18 +11,44 @@ interface TimeSlot {
 export default function Home() {
   const [hourlyRate, setHourlyRate] = useState<number>(15);
   const [currency, setCurrency] = useState<string>("$");
-  const [slots, setSlots] = useState<TimeSlot[]>([
-    { id: 1, start: "", end: "" },
-  ]);
+  const [slots, setSlots] = useState<TimeSlot[]>([]);
+
+  const getCurrentTime = (): string => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  };
 
   const addSlot = () => {
-    setSlots([...slots, { id: Date.now(), start: "", end: "" }]);
+    setSlots([...slots, { id: Date.now(), start: getCurrentTime(), end: "" }]);
+  };
+
+  const adjustTime = (id: number, field: "start" | "end", deltaMinutes: number) => {
+    setSlots(
+      slots.map((slot) => {
+        if (slot.id !== id) return slot;
+
+        let baseTime = slot[field];
+        if (!baseTime) {
+          baseTime = field === "end" ? (slot.start || getCurrentTime()) : getCurrentTime();
+        }
+
+        const [hours, minutes] = baseTime.split(":").map(Number);
+        let totalMinutes = hours * 60 + minutes + deltaMinutes;
+
+        // Clamp to valid range 00:00 - 23:59
+        totalMinutes = Math.max(0, Math.min(23 * 60 + 59, totalMinutes));
+
+        const newHours = Math.floor(totalMinutes / 60);
+        const newMins = totalMinutes % 60;
+        const newTime = `${String(newHours).padStart(2, "0")}:${String(newMins).padStart(2, "0")}`;
+
+        return { ...slot, [field]: newTime };
+      })
+    );
   };
 
   const removeSlot = (id: number) => {
-    if (slots.length > 1) {
-      setSlots(slots.filter((slot) => slot.id !== id));
-    }
+    setSlots(slots.filter((slot) => slot.id !== id));
   };
 
   const updateSlot = (id: number, field: "start" | "end", value: string) => {
@@ -163,33 +189,32 @@ export default function Home() {
                           {formatTime(slotMinutes)}
                         </span>
                       )}
-                      {slots.length > 1 && (
-                        <button
-                          onClick={() => removeSlot(slot.id)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-red-900/30 dark:hover:text-red-400"
-                          title="Удалить слот"
+                      <button
+                        onClick={() => removeSlot(slot.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                        title="Удалить слот"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </button>
-                      )}
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
                     </div>
                   </div>
 
                   {/* Time Inputs */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Start time column */}
+                    <div className="rounded-lg bg-slate-50/50 p-2 dark:bg-zinc-700/30">
                       <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-zinc-400">
                         Начало
                       </label>
@@ -199,10 +224,30 @@ export default function Home() {
                         onChange={(e) =>
                           updateSlot(slot.id, "start", e.target.value)
                         }
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-base font-medium text-slate-700 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-center text-base font-medium text-slate-700 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
                       />
+                      <div className="mt-2 grid grid-cols-3 gap-1">
+                        {[
+                          { label: "-1ч", delta: -60 },
+                          { label: "-30м", delta: -30 },
+                          { label: "-10м", delta: -10 },
+                          { label: "+10м", delta: 10 },
+                          { label: "+30м", delta: 30 },
+                          { label: "+1ч", delta: 60 },
+                        ].map((btn) => (
+                          <button
+                            key={`start-${btn.label}`}
+                            onClick={() => adjustTime(slot.id, "start", btn.delta)}
+                            className="rounded bg-slate-200/80 px-1.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-300 active:bg-slate-400 dark:bg-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-500"
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div>
+
+                    {/* End time column */}
+                    <div className="rounded-lg bg-slate-50/50 p-2 dark:bg-zinc-700/30">
                       <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-zinc-400">
                         Конец
                       </label>
@@ -212,8 +257,26 @@ export default function Home() {
                         onChange={(e) =>
                           updateSlot(slot.id, "end", e.target.value)
                         }
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-base font-medium text-slate-700 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-center text-base font-medium text-slate-700 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
                       />
+                      <div className="mt-2 grid grid-cols-3 gap-1">
+                        {[
+                          { label: "-1ч", delta: -60 },
+                          { label: "-30м", delta: -30 },
+                          { label: "-10м", delta: -10 },
+                          { label: "+10м", delta: 10 },
+                          { label: "+30м", delta: 30 },
+                          { label: "+1ч", delta: 60 },
+                        ].map((btn) => (
+                          <button
+                            key={`end-${btn.label}`}
+                            onClick={() => adjustTime(slot.id, "end", btn.delta)}
+                            className="rounded bg-slate-200/80 px-1.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-300 active:bg-slate-400 dark:bg-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-500"
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
